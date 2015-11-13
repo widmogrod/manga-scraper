@@ -1,0 +1,5 @@
+{
+    "require": {
+        "widmogrod/php-functional": "^2.0"
+    }
+}
