@@ -25,21 +25,14 @@ function getUrl($url)
         : M\Either\Right::of($result);
 }
 
-// String -> IO ()
+// String -> Either String String
 function makeDirectory($path) {
     return !is_dir($path) && !mkdir($path, 0700)
         ? M\Either\Left::of("Cant create directory $path")
         : M\Either\Right::of($path);
-    // return M\IO::of(function() {
-        // if (!is_dir($path) && !mkdir($path, 0700)) {
-        //     return M\IO\ioError(sprintf(
-        //         'Cant create a directory %s',
-        //         $path
-        //     ));
-        // }
-    // });
 }
 
+// String -> String -> Either String String
 function writeFile($name, $content) {
     return false === file_put_contents($name, $content)
         ? M\Either\Left::of("Cant save content of the file $name")
@@ -57,6 +50,7 @@ function toDomDoc($data) {
         : M\Either\Left::of("Can't load html data from given source");
 }
 
+// DOMDocument -> Either String []
 function chaptersList(\DOMDocument $doc) {
     $xpath = new \DOMXPath($doc);
     $elements = $xpath->query(
@@ -81,6 +75,7 @@ function chaptersList(\DOMDocument $doc) {
     return M\Either\Right::of($chapters);
 }
 
+// DOMDocument -> Either String []
 function chapterPages(\DOMDocument $doc) {
     $xpath = new \DOMXPath($doc);
     $elements = $xpath->query(
@@ -103,6 +98,7 @@ function chapterPages(\DOMDocument $doc) {
     return M\Either\Right::of($result);
 }
 
+// DOMDocument -> Either String String
 function pageImageURL(\DOMDocument $doc) {
     $xpath = new \DOMXPath($doc);
     $elements = $xpath->query(
@@ -126,26 +122,17 @@ $getChapters = f\pipeline(
     f\bind('chaptersList')
 );
 
-// $chapters = $getChapters($mangaUrl);
-// var_dump($chapters);
-
 $getChapterPages = f\pipeline(
     'getUrl',
     f\bind('toDomDoc'),
     f\bind('chapterPages')
 );
 
-// $pages = $getChapterPages('http://www.mangatown.com/manga/feng_shen_ji/c001/');
-// var_dump($pages);
-
 $getPagesImageURL = f\pipeline(
     'getUrl',
     f\bind('toDomDoc'),
     f\bind('pageImageURL')
 );
-// $image = $getPagesImageURL('http://www.mangatown.com/manga/feng_shen_ji/c001/');
-// var_dump($image);
-
 
 $result = $getChapters($mangaUrl)
     ->bind(function($chapters) use ($getChapterPages, $getPagesImageURL) {
@@ -175,28 +162,3 @@ M\Either\either(
     'var_dump',
     $result
 );
-
-
-// $link = 'http://s.mangatown.com/store/manga/10458/%s.0/compressed/dfeng_shen_ji_ch%s_p%s.jpg?v=51339361821';
-// $link = 'http://s.mangatown.com/store/manga/10458/009.0/compressed/dfeng-shen-ji-3420141.jpg?v=51341177841';
-// // for ($i = 9; $i < 170; $i++) {
-// $i = 9;
-// $chapter = substr("000$i", -3);
-// var_dump($chapter);
-// for ($j = 1; $j < 40; $j++) {
-//     $page = substr("000$j", -3);
-//     var_dump(['$page' => $page]);
-//
-//     if (!is_dir($chapter)) {
-//         mkdir($chapter, 0755);
-//     }
-//
-//     $url = sprintf($link, $chapter, $chapter, $page);
-//     var_dump(['$url' => $url]);
-//     $image = file_get_contents($url);
-//
-//     $status = file_put_contents($chapter.'/'. $page. '.jpg', $image);
-//
-//     var_dump(!!$image, $url, $status);
-// }
-// // }
