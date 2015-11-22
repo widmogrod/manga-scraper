@@ -201,7 +201,7 @@ function pageImageURL(\DOMDocument $doc)
     return f\map(f\map(elementToPageImage), xpath($doc, $xpath));
 }
 
-$mangaUrl = 'http://www.mangatown.com/manga/feng_shen_ji/';
+$mangaUrl = 'http://www.mangatown.com/manga/totsukuni_no_shoujo/';
 
 // getChapters :: String -> Maybe (Collection Chapter)
 function getChapters($mangaUrl)
@@ -221,7 +221,7 @@ function getChapterPages(Chapter $chapter)
         , f\bind(toDomDoc)
         , Either\toMaybe
         , f\bind(chapterPages)
-    ), $chapter);
+    ), $chapter->getUrl());
 }
 
 function getPagesImageURL(Page $page)
@@ -231,39 +231,61 @@ function getPagesImageURL(Page $page)
         , f\bind(toDomDoc)
         , Either\toMaybe
         , f\bind(pageImageURL)
-    ), $page);
+    ), $page->getUrl());
 }
 
-// $result = $getChapters($mangaUrl)
-//     ->bind(function($chapters) use ($getChapterPages, $getPagesImageURL) {
-//         foreach($chapters as $chapter) {
-//             $getChapterPages($chapter['url'])
-//                 ->bind(function($pages) use ($chapter, $getPagesImageURL) {
-//                     foreach($pages as $page) {
-//                         Either\either(
-//                             'var_dump',
-//                             'var_dump',
-//                             f\liftM2(
-//                                 function($path, $imageContent) use ($page) {
-//                                     return writeFile($path . '/' . $page['name'] . '.jpg', $imageContent);
-//                                 },
-//                                 makeDirectory($chapter['name']),
-//                                 $getPagesImageURL($page['url'])
-//                                     ->bind('getUrl')
-//                             )
-//                         );
-//                     }
-//                 });
-//         }
-//     });
-//
-// Either\either(
-//     'var_dump',
-//     'var_dump',
-//     $result
-// );
+$result = getChapters($mangaUrl)
+    ->bind(function (Collection $chapters) {
+        return $chapters->map(function (Chapter $chapter) {
+            return getChapterPages($chapter)
+                ->bind(function (Collection $pages) use ($chapter) {
+                    return $pages->map(function (Page $page) use($chapter) {
+                        return f\liftM2(
+                                function ($path, Either\Either $imageContent) use ($page) {
+                                    return Either\either(
+                                        function($left) {
+                                            return Either\left($left);
+                                        },
+                                        function($content) use ($path, $page) {
+                                            return writeFile($path . '/' . $page->getName() . '.jpg', $content);
+                                        },
+                                        $imageContent
+                                    );
+                                },
+                                makeDirectory($chapter->getName()),
+                                getPagesImageURL($page)
+                                    ->bind(function(Collection $images) {
+                                        return $images->bind(function(PageImage $image) {
+                                            return getUrl($image->getUrl());
+                                        });
+                                    })
+                            );
+                    });
+                });
+        });
+    });
 
-var_dump(getChapters($mangaUrl));
+$result->bind('var_dump');
+//                        Either\either(
+//                            'var_dump',
+//                            'var_dump',
+//                            f\liftM2(
+//                                function ($path, $imageContent) use ($page) {
+//                                    return writeFile($path . '/' . $page['name'] . :'.jpg', $imageContent);
+//                                },
+//                                makeDirectory($chapter['name']),
+//                                getPagesImageURL($page->getUrl())
+//                                    ->bind('getUrl')
+//                            )
+//                        );
+
+//Either\either(
+//    'var_dump',
+//    'var_dump',
+//    $result
+//);
+
+//var_dump(getChapters($mangaUrl));
 // IO ()
 //function main()
 //{
