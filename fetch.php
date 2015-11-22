@@ -154,6 +154,7 @@ function elementToPage(DOMElement $element)
     );
 }
 
+const chapterPages = 'chapterPages';
 
 // DOMDocument -> Maybe (Collection Page)
 function chapterPages(\DOMDocument $doc)
@@ -188,6 +189,8 @@ function elementToPageImage(DOMElement $element)
     );
 }
 
+const pageImageURL = 'pageImageURL';
+
 // DOMDocument -> Maybe (Collection PageImage)
 function pageImageURL(\DOMDocument $doc)
 {
@@ -199,26 +202,37 @@ function pageImageURL(\DOMDocument $doc)
 }
 
 $mangaUrl = 'http://www.mangatown.com/manga/feng_shen_ji/';
-$getChapters = f\pipeline(
-    getUrl
-    , f\bind(toDomDoc)
-    , Either\toMaybe
-    , f\bind(chaptersList)
-);
 
-$getChapterPages = f\pipeline(
-    'getUrl'
-    , f\bind('toDomDoc')
-    , Either\toMaybe
-    , f\bind('chapterPages')
-);
+// getChapters :: String -> Maybe (Collection Chapter)
+function getChapters($mangaUrl)
+{
+    return call_user_func(f\pipeline(
+        getUrl
+        , f\bind(toDomDoc)
+        , Either\toMaybe
+        , f\bind(chaptersList)
+    ), $mangaUrl);
+}
 
-$getPagesImageURL = f\pipeline(
-    'getUrl'
-    , f\bind('toDomDoc')
-    , Either\toMaybe
-    , f\bind('pageImageURL')
-);
+function getChapterPages(Chapter $chapter)
+{
+    return call_user_func(f\pipeline(
+        getUrl
+        , f\bind(toDomDoc)
+        , Either\toMaybe
+        , f\bind(chapterPages)
+    ), $chapter);
+}
+
+function getPagesImageURL(Page $page)
+{
+    return call_user_func(f\pipeline(
+        getUrl
+        , f\bind(toDomDoc)
+        , Either\toMaybe
+        , f\bind(pageImageURL)
+    ), $page);
+}
 
 // $result = $getChapters($mangaUrl)
 //     ->bind(function($chapters) use ($getChapterPages, $getPagesImageURL) {
@@ -249,7 +263,7 @@ $getPagesImageURL = f\pipeline(
 //     $result
 // );
 
-var_dump($getChapters($mangaUrl));
+var_dump(getChapters($mangaUrl));
 // IO ()
 //function main()
 //{
