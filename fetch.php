@@ -2,7 +2,14 @@
 require_once 'vendor/autoload.php';
 
 use Monad as M;
+use Monad\IO;
+use Monad\Maybe;
+use Monad\Either;
+use Monad\Collection;
+use Monad\Control as control;
 use Functional as f;
+
+const getUrl = 'getUrl';
 
 // String -> Either String String
 function getUrl($url)
@@ -21,144 +28,235 @@ function getUrl($url)
     curl_close($curl);
 
     return $errno !== 0
-        ? M\Either\Left::of($error)
-        : M\Either\Right::of($result);
+        ? Either\Left::of($error)
+        : Either\Right::of($result);
 }
 
 // String -> Either String String
-function makeDirectory($path) {
+function makeDirectory($path)
+{
     return !is_dir($path) && !mkdir($path, 0700)
-        ? M\Either\Left::of("Cant create directory $path")
-        : M\Either\Right::of($path);
+        ? Either\Left::of("Cant create directory $path")
+        : Either\Right::of($path);
 }
 
 // String -> String -> Either String String
-function writeFile($name, $content) {
+function writeFile($name, $content)
+{
     return false === file_put_contents($name, $content)
-        ? M\Either\Left::of("Cant save content of the file $name")
-        : M\Either\Right::of($name);
+        ? Either\Left::of("Cant save content of the file $name")
+        : Either\Right::of($name);
 }
+
+const toDomDoc = 'toDomDoc';
 
 // String -> Either String DOMDocument
-function toDomDoc($data) {
+function toDomDoc($data)
+{
     $document = new \DOMDocument();
-    $previos = libxml_use_internal_errors(true);
+    $previous = libxml_use_internal_errors(true);
     $isLoaded = $document->loadHTML($data);
-    libxml_use_internal_errors($previos);
+    libxml_use_internal_errors($previous);
+
     return $isLoaded
-        ? M\Either\Right::of($document)
-        : M\Either\Left::of("Can't load html data from given source");
+        ? Either\Right::of($document)
+        : Either\Left::of("Can't load html data from given source");
 }
 
-// DOMDocument -> Either String []
-function chaptersList(\DOMDocument $doc) {
+// DOMDocument -> String -> Maybe (Collection DOMElement)
+function xpath(\DOMDocument $doc, $path)
+{
     $xpath = new \DOMXPath($doc);
-    $elements = $xpath->query(
-        "//ul[contains(normalize-space(@class), 'chapter_list')]".
-        "//li".
-        "//a"
-    );
+    $elements = $xpath->query($path);
 
-    if (!count($elements)) {
-        return M\Either\Left::of('No result of chapters');
-    }
-
-    $chapters = [];
-    foreach($elements as $key => /* @var $element \DOMElement */ $element){
-        $name = trim($element->nodeValue);
-        $chapters[] = [
-            'url' => $element->getAttribute('href'),
-            'name' => $name,
-        ];
-    }
-
-    return M\Either\Right::of($chapters);
+    return $elements->length
+        ? Maybe\just(Collection::of($elements))
+        : Maybe\nothing();
 }
 
-// DOMDocument -> Either String []
-function chapterPages(\DOMDocument $doc) {
-    $xpath = new \DOMXPath($doc);
-    $elements = $xpath->query(
-        "//option[contains(normalize-space(@value), 'http')]"
-    );
 
-    if (!count($elements)) {
-        return M\Either\Left::of('No result of chapter pages');
+class Chapter
+{
+    private $url;
+    private $name;
+
+    public function __construct($name, $url)
+    {
+        $this->name = $name;
+        $this->url = $url;
     }
 
-    $result = [];
-    foreach($elements as $key => /* @var $element \DOMElement */ $element){
-        $name = trim($element->nodeValue);
-        $result[$name] = [
-            'url' => $element->getAttribute('value'),
-            'name' => $name,
-        ];
+    public function getUrl()
+    {
+        return $this->url;
     }
 
-    return M\Either\Right::of($result);
+    public function getName()
+    {
+        return $this->name;
+    }
 }
 
-// DOMDocument -> Either String String
-function pageImageURL(\DOMDocument $doc) {
-    $xpath = new \DOMXPath($doc);
-    $elements = $xpath->query(
-        "//div[contains(normalize-space(@id), 'viewer')]".
-        "//img"
+const elementToChapterItem = 'elementToChapterItem';
+
+// DOMElement -> Chapter
+function elementToChapterItem(DOMElement $element)
+{
+    return new Chapter(
+        trim($element->nodeValue),
+        $element->getAttribute('href')
     );
+}
 
-    if (!count($elements)) {
-        return M\Either\Left::of('No result of chapter pages');
+const chaptersList = 'chaptersList';
+
+// DOMDocument -> Maybe (Collection ChapterItem)
+function chaptersList(\DOMDocument $doc)
+{
+    $xpath =
+        "//ul[contains(normalize-space(@class), 'chapter_list')]" .
+        "//li" .
+        "//a";
+
+    return f\map(f\map(elementToChapterItem), xpath($doc, $xpath));
+}
+
+class Page
+{
+    private $url;
+    private $name;
+
+    public function __construct($name, $url)
+    {
+        $this->name = $name;
+        $this->url = $url;
     }
 
-    foreach($elements as $key => /* @var $element \DOMElement */ $element){
-        return M\Either\Right::of($element->getAttribute('src'));
+    public function getUrl()
+    {
+        return $this->url;
     }
+
+    public function getName()
+    {
+        return $this->name;
+    }
+}
+
+const elementToPage = 'elementToPage';
+
+// DOMElement -> Page
+function elementToPage(DOMElement $element)
+{
+    return new Page(
+        trim($element->nodeValue),
+        $element->getAttribute('value')
+    );
+}
+
+
+// DOMDocument -> Maybe (Collection Page)
+function chapterPages(\DOMDocument $doc)
+{
+    $xpath = "//option[contains(normalize-space(@value), 'http')]";
+
+    return f\map(f\map(elementToPage), xpath($doc, $xpath));
+}
+
+class PageImage
+{
+    private $url;
+
+    public function __construct($url)
+    {
+        $this->url = $url;
+    }
+
+    public function getUrl()
+    {
+        return $this->url;
+    }
+}
+
+const elementToPageImage = 'elementToPageImage';
+
+// DOMElement -> PageImage
+function elementToPageImage(DOMElement $element)
+{
+    return new PageImage(
+        $element->getAttribute('src')
+    );
+}
+
+// DOMDocument -> Maybe (Collection PageImage)
+function pageImageURL(\DOMDocument $doc)
+{
+    $xpath =
+        "//div[contains(normalize-space(@id), 'viewer')]" .
+        "//img";
+
+    return f\map(f\map(elementToPageImage), xpath($doc, $xpath));
 }
 
 $mangaUrl = 'http://www.mangatown.com/manga/feng_shen_ji/';
 $getChapters = f\pipeline(
-    'getUrl',
-    f\bind('toDomDoc'),
-    f\bind('chaptersList')
+    getUrl
+    , f\bind(toDomDoc)
+    , Either\toMaybe
+    , f\bind(chaptersList)
 );
 
 $getChapterPages = f\pipeline(
-    'getUrl',
-    f\bind('toDomDoc'),
-    f\bind('chapterPages')
+    'getUrl'
+    , f\bind('toDomDoc')
+    , Either\toMaybe
+    , f\bind('chapterPages')
 );
 
 $getPagesImageURL = f\pipeline(
-    'getUrl',
-    f\bind('toDomDoc'),
-    f\bind('pageImageURL')
+    'getUrl'
+    , f\bind('toDomDoc')
+    , Either\toMaybe
+    , f\bind('pageImageURL')
 );
 
-$result = $getChapters($mangaUrl)
-    ->bind(function($chapters) use ($getChapterPages, $getPagesImageURL) {
-        foreach($chapters as $chapter) {
-            $getChapterPages($chapter['url'])
-                ->bind(function($pages) use ($chapter, $getPagesImageURL) {
-                    foreach($pages as $page) {
-                        M\Either\either(
-                            'var_dump',
-                            'var_dump',
-                            f\liftM2(
-                                function($path, $imageContent) use ($page) {
-                                    return writeFile($path . '/' . $page['name'] . '.jpg', $imageContent);
-                                },
-                                makeDirectory($chapter['name']),
-                                $getPagesImageURL($page['url'])
-                                    ->bind('getUrl')
-                            )
-                        );
-                    }
-                });
-        }
-    });
+// $result = $getChapters($mangaUrl)
+//     ->bind(function($chapters) use ($getChapterPages, $getPagesImageURL) {
+//         foreach($chapters as $chapter) {
+//             $getChapterPages($chapter['url'])
+//                 ->bind(function($pages) use ($chapter, $getPagesImageURL) {
+//                     foreach($pages as $page) {
+//                         Either\either(
+//                             'var_dump',
+//                             'var_dump',
+//                             f\liftM2(
+//                                 function($path, $imageContent) use ($page) {
+//                                     return writeFile($path . '/' . $page['name'] . '.jpg', $imageContent);
+//                                 },
+//                                 makeDirectory($chapter['name']),
+//                                 $getPagesImageURL($page['url'])
+//                                     ->bind('getUrl')
+//                             )
+//                         );
+//                     }
+//                 });
+//         }
+//     });
+//
+// Either\either(
+//     'var_dump',
+//     'var_dump',
+//     $result
+// );
 
-M\Either\either(
-    'var_dump',
-    'var_dump',
-    $result
-);
+var_dump($getChapters($mangaUrl));
+// IO ()
+//function main()
+//{
+//    return IO\getArgs()->bind('var_dump');
+//}
+//
+//main()->run();
+
+
+

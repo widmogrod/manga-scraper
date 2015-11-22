@@ -9,16 +9,16 @@
     "packages": [
         {
             "name": "widmogrod/php-functional",
-            "version": "2.0.0",
+            "version": "2.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/widmogrod/php-functional.git",
-                "reference": "be73ae4bc10aab402a9cf77fea0a527ad807fe65"
+                "reference": "762cd841c6f4b7034f892d5bd38e8d7cea083378"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/widmogrod/php-functional/zipball/be73ae4bc10aab402a9cf77fea0a527ad807fe65",
-                "reference": "be73ae4bc10aab402a9cf77fea0a527ad807fe65",
+                "url": "https://api.github.com/repos/widmogrod/php-functional/zipball/762cd841c6f4b7034f892d5bd38e8d7cea083378",
+                "reference": "762cd841c6f4b7034f892d5bd38e8d7cea083378",
                 "shasum": ""
             },
             "require-dev": {
@@ -55,7 +55,7 @@
                 }
             ],
             "description": "Functors, Applicative and Monads are fascinating concept. Purpose of this library is to explore them in OOP PHP world.",
-            "time": "2015-11-10 00:32:48"
+            "time": "2015-11-22 20:34:16"
         }
     ],
     "packages-dev": [],
