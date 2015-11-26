@@ -1,6 +1,7 @@
 <?php
 require_once 'vendor/autoload.php';
 
+use FantasyLand\Monad;
 use Monad as M;
 use Monad\IO;
 use Monad\Maybe;
@@ -35,26 +36,26 @@ class ErrCurl
 class ErrCantDownload
 {
     /**
-     * @var PageImage
+     * @var ChapterPage
      */
-    private $pageImage;
+    private $chapterPage;
     /**
      * @var ErrCurl
      */
     private $curl;
 
-    public function __construct(PageImage $pageImage, ErrCurl $curl)
+    public function __construct(ChapterPage $chapterPage, ErrCurl $curl)
     {
-        $this->pageImage = $pageImage;
         $this->curl = $curl;
+        $this->chapterPage = $chapterPage;
     }
 
     /**
-     * @return PageImage
+     * @return ChapterPage
      */
-    public function getPageImage()
+    public function getChapterPage()
     {
-        return $this->pageImage;
+        return $this->chapterPage;
     }
 
     /**
@@ -92,7 +93,7 @@ function getUrl($url)
 // String -> Either String String
 function makeDirectory($path)
 {
-    return !is_dir($path) && !mkdir($path, 0700)
+    return !is_dir($path) && !mkdir($path, 0700, true)
         ? Either\Left::of("Cant create directory $path")
         : Either\Right::of($path);
 }
@@ -292,49 +293,127 @@ function getPagesImageURL(Page $page)
 
 $mangaUrl = 'http://www.mangatown.com/manga/sea_tiger/';
 
-$result = getChapters($mangaUrl)
-    ->bind(function (Collection $chapters) {
-        return $chapters->map(function (Chapter $chapter) {
-            return getChapterPages($chapter)
-                ->bind(function (Collection $pages) use ($chapter) {
-                    return $pages->map(function (Page $page) use ($chapter) {
-                        return f\liftM2(
-                            function ($path, Either\Either $imageContent) use ($page) {
-                                return Either\either(
-                                    function ($left) {
-                                        return Either\left($left);
-                                    },
-                                    function ($content) use ($path, $page) {
-                                        return writeFile($path . '/' . $page->getName() . '.jpg', $content);
-                                    },
-                                    $imageContent
-                                );
-                            },
-                            makeDirectory($chapter->getName()),
-                            getPagesImageURL($page)
-                                ->bind(function (Collection $images) {
-                                    return $images->bind(function (PageImage $image) {
-                                        return Either\doubleMap(
-                                            function (ErrCurl $error) use ($image) {
-                                                return new ErrCantDownload($image, $error);
-                                            }
-                                            , f\identity
-                                            , getUrl($image->getUrl())
+class ChapterPage
+{
+    /**
+     * @var Chapter
+     */
+    private $chapter;
+    /**
+     * @var Page
+     */
+    private $page;
+    /**
+     * @var PageImage
+     */
+    private $pageImage;
+
+    public function __construct(Chapter $chapter, Page $page, PageImage $pageImage)
+    {
+        $this->chapter = $chapter;
+        $this->page = $page;
+        $this->pageImage = $pageImage;
+    }
+
+    /**
+     * @return Chapter
+     */
+    public function getChapter()
+    {
+        return $this->chapter;
+    }
+
+    /**
+     * @return Page
+     */
+    public function getPage()
+    {
+        return $this->page;
+    }
+
+    /**
+     * @return PageImage
+     */
+    public function getPageImage()
+    {
+        return $this->pageImage;
+    }
+}
+
+// String -> Maybe (Collection ChapterPage)
+function fetchMangaData($mangaUrl)
+{
+    return getChapters($mangaUrl)
+        ->map(function (Collection $chapters) {
+            return $chapters->bind(function (Chapter $chapter) {
+                return getChapterPages($chapter)
+                    ->bind(function (Collection $pages) use ($chapter) {
+                        return $pages->bind(function (Page $page) use ($chapter) {
+                            return getPagesImageURL($page)
+                                ->bind(function (Collection $images) use ($chapter, $page) {
+                                    return $images->map(function (PageImage $image) use ($chapter, $page) {
+                                        return new ChapterPage(
+                                            $chapter,
+                                            $page,
+                                            $image
                                         );
                                     });
-                                })
-                        );
+                                });
+                        });
                     });
-                });
+            });
+        });
+}
+
+const download = 'download';
+
+function liftM3(
+    callable $transformation,
+    Monad $ma,
+    Monad $mb,
+    Monad $mc
+)
+{
+    return $ma->bind(function ($a) use ($mb, $mc, $transformation) {
+        return $mb->bind(function ($b) use ($mc, $a, $transformation) {
+            return $mc->bind(function ($c) use ($a, $b, $transformation) {
+                return call_user_func($transformation, $a, $b, $c);
+            });
         });
     });
+}
 
-//control\doo([
-//    '$chapters' => getChapters($mangaUrl),
-//    '$chapterPages' =>
-//]);
+// ChapterPage -> Either ErrCantDownload String
+function download(ChapterPage $chapterPage)
+{
+    return liftM3(
+        function ($path, $imageContent, ChapterPage $chapterPage) {
+            return writeFile($path . '/' . $chapterPage->getPage()->getName() . '.jpg', $imageContent);
+        },
+        makeDirectory(
+            './manga/' . $chapterPage->getChapter()->getName()
+        ),
+        Either\doubleMap(
+            function (ErrCurl $error) use ($chapterPage) {
+                return new ErrCantDownload($chapterPage, $error);
+            }
+            , f\identity
+            , getUrl($chapterPage->getPageImage()->getUrl())
+        ),
+        Either\Right::of($chapterPage)
+    );
+}
 
-//$result->bind('var_dump');
+$mangaData = fetchMangaData($mangaUrl);
+$givenType = is_object($mangaData) ? get_class($mangaData) : gettype($mangaData);
+var_dump($givenType);
+var_dump($mangaData);
+
+
+$afterDownload = $mangaData->map(f\bind(download));
+$givenType = is_object($afterDownload) ? get_class($afterDownload) : gettype($afterDownload);
+var_dump($givenType);
+var_dump($afterDownload);
 
 //$r = Collection::of([
 //    Maybe\nothing()
