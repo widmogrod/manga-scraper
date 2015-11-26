@@ -9,6 +9,63 @@ use Monad\Collection;
 use Monad\Control as control;
 use Functional as f;
 
+
+class ErrCurl
+{
+    private $url;
+    private $error;
+
+    public function __construct($url, $error)
+    {
+        $this->url = $url;
+        $this->error = $error;
+    }
+
+    public function getUrl()
+    {
+        return $this->url;
+    }
+
+    public function getError()
+    {
+        return $this->error;
+    }
+}
+
+class ErrCantDownload
+{
+    /**
+     * @var PageImage
+     */
+    private $pageImage;
+    /**
+     * @var ErrCurl
+     */
+    private $curl;
+
+    public function __construct(PageImage $pageImage, ErrCurl $curl)
+    {
+        $this->pageImage = $pageImage;
+        $this->curl = $curl;
+    }
+
+    /**
+     * @return PageImage
+     */
+    public function getPageImage()
+    {
+        return $this->pageImage;
+    }
+
+    /**
+     * @return ErrCurl
+     */
+    public function getCurl()
+    {
+        return $this->curl;
+    }
+}
+
 const getUrl = 'getUrl';
 
 // String -> Either String String
@@ -21,14 +78,14 @@ function getUrl($url)
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, 0);
     // curl_setopt($curl, CURLOPT_REFERER, $referer);
     curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_TIMEOUT, 2);
+    curl_setopt($curl, CURLOPT_TIMEOUT, 1);
     $result = curl_exec($curl);
     $errno = curl_errno($curl);
     $error = curl_error($curl);
     curl_close($curl);
 
     return $errno !== 0
-        ? Either\Left::of($error)
+        ? Either\Left::of(new ErrCurl($url, $error))
         : Either\Right::of($result);
 }
 
@@ -201,7 +258,6 @@ function pageImageURL(\DOMDocument $doc)
     return f\map(f\map(elementToPageImage), xpath($doc, $xpath));
 }
 
-$mangaUrl = 'http://www.mangatown.com/manga/totsukuni_no_shoujo/';
 
 // getChapters :: String -> Maybe (Collection Chapter)
 function getChapters($mangaUrl)
@@ -234,56 +290,61 @@ function getPagesImageURL(Page $page)
     ), $page->getUrl());
 }
 
+$mangaUrl = 'http://www.mangatown.com/manga/sea_tiger/';
+
 $result = getChapters($mangaUrl)
     ->bind(function (Collection $chapters) {
         return $chapters->map(function (Chapter $chapter) {
             return getChapterPages($chapter)
                 ->bind(function (Collection $pages) use ($chapter) {
-                    return $pages->map(function (Page $page) use($chapter) {
+                    return $pages->map(function (Page $page) use ($chapter) {
                         return f\liftM2(
-                                function ($path, Either\Either $imageContent) use ($page) {
-                                    return Either\either(
-                                        function($left) {
-                                            return Either\left($left);
-                                        },
-                                        function($content) use ($path, $page) {
-                                            return writeFile($path . '/' . $page->getName() . '.jpg', $content);
-                                        },
-                                        $imageContent
-                                    );
-                                },
-                                makeDirectory($chapter->getName()),
-                                getPagesImageURL($page)
-                                    ->bind(function(Collection $images) {
-                                        return $images->bind(function(PageImage $image) {
-                                            return getUrl($image->getUrl());
-                                        });
-                                    })
-                            );
+                            function ($path, Either\Either $imageContent) use ($page) {
+                                return Either\either(
+                                    function ($left) {
+                                        return Either\left($left);
+                                    },
+                                    function ($content) use ($path, $page) {
+                                        return writeFile($path . '/' . $page->getName() . '.jpg', $content);
+                                    },
+                                    $imageContent
+                                );
+                            },
+                            makeDirectory($chapter->getName()),
+                            getPagesImageURL($page)
+                                ->bind(function (Collection $images) {
+                                    return $images->bind(function (PageImage $image) {
+                                        return Either\doubleMap(
+                                            function (ErrCurl $error) use ($image) {
+                                                return new ErrCantDownload($image, $error);
+                                            }
+                                            , f\identity
+                                            , getUrl($image->getUrl())
+                                        );
+                                    });
+                                })
+                        );
                     });
                 });
         });
     });
 
-$result->bind('var_dump');
-//                        Either\either(
-//                            'var_dump',
-//                            'var_dump',
-//                            f\liftM2(
-//                                function ($path, $imageContent) use ($page) {
-//                                    return writeFile($path . '/' . $page['name'] . :'.jpg', $imageContent);
-//                                },
-//                                makeDirectory($chapter['name']),
-//                                getPagesImageURL($page->getUrl())
-//                                    ->bind('getUrl')
-//                            )
-//                        );
+//control\doo([
+//    '$chapters' => getChapters($mangaUrl),
+//    '$chapterPages' =>
+//]);
 
-//Either\either(
-//    'var_dump',
-//    'var_dump',
-//    $result
-//);
+//$result->bind('var_dump');
+
+//$r = Collection::of([
+//    Maybe\nothing()
+//    , Collection::of([
+//        Either\Left::of(
+//            new ErrCantDownload(
+//                new PageImage('http://')
+//                , new ErrCurl("http://", "Operation timed out after 1003 milliseconds with 0 bytes received"))),
+//    ])
+//]);
 
 //var_dump(getChapters($mangaUrl));
 // IO ()
@@ -293,6 +354,5 @@ $result->bind('var_dump');
 //}
 //
 //main()->run();
-
 
 
