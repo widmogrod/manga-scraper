@@ -271,6 +271,7 @@ function getChapters($mangaUrl)
     ), $mangaUrl);
 }
 
+// getChapterPages :: Chapter -> Maybe (Collection Page)
 function getChapterPages(Chapter $chapter)
 {
     return call_user_func(f\pipeline(
@@ -281,6 +282,7 @@ function getChapterPages(Chapter $chapter)
     ), $chapter->getUrl());
 }
 
+// getPagesImageURL :: Page -> Maybe (Collection PageImage)
 function getPagesImageURL(Page $page)
 {
     return call_user_func(f\pipeline(
@@ -291,7 +293,6 @@ function getPagesImageURL(Page $page)
     ), $page->getUrl());
 }
 
-$mangaUrl = 'http://www.mangatown.com/manga/sea_tiger/';
 
 class ChapterPage
 {
@@ -340,28 +341,37 @@ class ChapterPage
     }
 }
 
-// String -> Maybe (Collection ChapterPage)
+// String -> Maybe (Collection (Maybe ChapterPage))
 function fetchMangaData($mangaUrl)
 {
+    // getChapters :: String -> Maybe (Collection Chapter)
     return getChapters($mangaUrl)
         ->map(function (Collection $chapters) {
-            return $chapters->bind(function (Chapter $chapter) {
-                return getChapterPages($chapter)
-                    ->bind(function (Collection $pages) use ($chapter) {
-                        return $pages->bind(function (Page $page) use ($chapter) {
-                            return getPagesImageURL($page)
-                                ->bind(function (Collection $images) use ($chapter, $page) {
-                                    return $images->map(function (PageImage $image) use ($chapter, $page) {
-                                        return new ChapterPage(
-                                            $chapter,
-                                            $page,
-                                            $image
-                                        );
-                                    });
+            return $chapters
+                ->bind(function (Chapter $chapter) {
+                    // getChapterPages :: Chapter -> Maybe (Collection Page)
+                    return getChapterPages($chapter)
+                        ->bind(function (Collection $pages) use ($chapter) {
+                            return $pages
+                                ->bind(function (Page $page) use ($chapter) {
+                                    // getPagesImageURL :: Page -> Maybe (Collection PageImage)
+                                    return getPagesImageURL($page)
+                                        ->bind(function (Collection $images) use ($chapter, $page) {
+                                            return $images
+                                                ->bind(function (PageImage $image) use (
+                                                    $chapter,
+                                                    $page
+                                                ) {
+                                                    return Maybe\Just::of(new ChapterPage(
+                                                        $chapter,
+                                                        $page,
+                                                        $image
+                                                    ));
+                                                });
+                                        });
                                 });
                         });
-                    });
-            });
+                });
         });
 }
 
@@ -372,8 +382,7 @@ function liftM3(
     Monad $ma,
     Monad $mb,
     Monad $mc
-)
-{
+) {
     return $ma->bind(function ($a) use ($mb, $mc, $transformation) {
         return $mb->bind(function ($b) use ($mc, $a, $transformation) {
             return $mc->bind(function ($c) use ($a, $b, $transformation) {
@@ -404,13 +413,17 @@ function download(ChapterPage $chapterPage)
     );
 }
 
+$mangaUrl = 'http://www.mangatown.com/manga/ryuu_to_hidari_te/';
+
+// fetchMangaData :: String -> Maybe (Collection (Maybe ChapterPage))
 $mangaData = fetchMangaData($mangaUrl);
 $givenType = is_object($mangaData) ? get_class($mangaData) : gettype($mangaData);
 var_dump($givenType);
 var_dump($mangaData);
+//file_put_contents('manga.state', serialize($mangaData));
 
 
-$afterDownload = $mangaData->map(f\bind(download));
+$afterDownload = $mangaData->map(f\map(f\map(download)));
 $givenType = is_object($afterDownload) ? get_class($afterDownload) : gettype($afterDownload);
 var_dump($givenType);
 var_dump($afterDownload);
