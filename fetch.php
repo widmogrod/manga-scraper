@@ -423,6 +423,7 @@ var_dump($mangaData);
 //file_put_contents('manga.state', serialize($mangaData));
 
 
+// Maybe (Collection Maybe Either ErrCantDownload String)
 $afterDownload = $mangaData->map(f\map(f\map(download)));
 $givenType = is_object($afterDownload) ? get_class($afterDownload) : gettype($afterDownload);
 var_dump($givenType);
