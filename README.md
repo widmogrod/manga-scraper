@@ -1,4 +1,5 @@
-# MangaTownExtractor
+# Manga scraper
 ## Introduction
-Set of utilities function simplifying extration of data from mangatown.com
+Manga scrapper written in functional style with Monads.
+Given project is just to explore functional programming style in PHP.
 
