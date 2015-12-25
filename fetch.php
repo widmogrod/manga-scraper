@@ -70,7 +70,7 @@ class ErrCantDownload
 const getUrl = 'getUrl';
 
 // String -> Either String String
-function getUrl($url)
+function getUrl($url, $ttl = null)
 {
     $curl = curl_init();
     curl_setopt($curl, CURLOPT_HEADER, 0);
@@ -79,7 +79,7 @@ function getUrl($url)
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, 0);
     // curl_setopt($curl, CURLOPT_REFERER, $referer);
     curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_TIMEOUT, 1);
+    curl_setopt($curl, CURLOPT_TIMEOUT, $ttl > 0 ? $ttl : 1);
     $result = curl_exec($curl);
     $errno = curl_errno($curl);
     $error = curl_error($curl);
@@ -393,7 +393,7 @@ function liftM3(
 }
 
 // ChapterPage -> Either ErrCantDownload String
-function download(ChapterPage $chapterPage)
+function download(ChapterPage $chapterPage, $ttl = null)
 {
     return liftM3(
         function ($path, $imageContent, ChapterPage $chapterPage) {
@@ -407,27 +407,57 @@ function download(ChapterPage $chapterPage)
                 return new ErrCantDownload($chapterPage, $error);
             }
             , f\identity
-            , getUrl($chapterPage->getPageImage()->getUrl())
+            , getUrl($chapterPage->getPageImage()->getUrl(), $ttl)
         ),
         Either\Right::of($chapterPage)
     );
 }
 
-$mangaUrl = 'http://www.mangatown.com/manga/ryuu_to_hidari_te/';
+//$mangaUrl = 'http://www.mangatown.com/manga/ryuu_to_hidari_te/';
+$mangaUrl = 'http://www.mangatown.com/manga/dragon_ball_chou/';
 
 // fetchMangaData :: String -> Maybe (Collection (Maybe ChapterPage))
 $mangaData = fetchMangaData($mangaUrl);
 $givenType = is_object($mangaData) ? get_class($mangaData) : gettype($mangaData);
-var_dump($givenType);
-var_dump($mangaData);
+//var_dump($givenType);
+//var_dump($mangaData);
 //file_put_contents('manga.state', serialize($mangaData));
 
 
 // Maybe (Collection Maybe Either ErrCantDownload String)
 $afterDownload = $mangaData->map(f\map(f\map(download)));
 $givenType = is_object($afterDownload) ? get_class($afterDownload) : gettype($afterDownload);
-var_dump($givenType);
-var_dump($afterDownload);
+//var_dump($givenType);
+//var_dump($afterDownload);
+
+//file_put_contents(serialize($afterDownload));
+
+const failed = 'failed';
+
+function failed(Maybe\Maybe $page, $ttl = null)
+{
+    return $page->map(function (Either\Either $either) use ($ttl) {
+        return $either->either(function (ErrCantDownload $errCantDownload) use ($ttl) {
+            return download($errCantDownload->getChapterPage(), $ttl);
+        }, Either\Right::of);
+    });
+}
+
+$toRetry = $afterDownload->map(function (Collection $collection) {
+    $ttl = 2;
+    do {
+        $toRetry = f\filter(function (Maybe\Maybe $maybe) {
+            return $maybe->extract() instanceof Either\Left;
+        }, $collection);
+
+        var_dump(count($toRetry));
+        var_dump($collection = Collection::of($toRetry)->map(function($a) use(&$ttl) {
+            return failed($a, $ttl++);
+        }));
+    } while(count($toRetry) > 0);
+});
+
+
 
 //$r = Collection::of([
 //    Maybe\nothing()
