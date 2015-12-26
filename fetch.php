@@ -11,7 +11,11 @@ use Monad\Control as control;
 use Functional as f;
 
 
-class ErrCurl
+interface Err
+{
+}
+
+class ErrCurl implements Err
 {
     private $url;
     private $error;
@@ -33,37 +37,49 @@ class ErrCurl
     }
 }
 
-class ErrCantDownload
+class ErrNoImage implements Err
+{
+    /**
+     * @var string
+     */
+    private $invalidContent;
+
+    public function __construct($invalidContent)
+    {
+        $this->invalidContent = $invalidContent;
+    }
+
+    public function getInvalidContent()
+    {
+        return $this->invalidContent;
+    }
+}
+
+class ErrChapter implements Err
 {
     /**
      * @var ChapterPage
      */
     private $chapterPage;
     /**
-     * @var ErrCurl
+     * @var Err
      */
-    private $curl;
+    private $reason;
 
-    public function __construct(ChapterPage $chapterPage, ErrCurl $curl)
+    public function __construct(ChapterPage $chapterPage, Err $reason)
     {
-        $this->curl = $curl;
         $this->chapterPage = $chapterPage;
+        $this->reason = $reason;
     }
 
-    /**
-     * @return ChapterPage
-     */
     public function getChapterPage()
     {
         return $this->chapterPage;
     }
 
-    /**
-     * @return ErrCurl
-     */
-    public function getCurl()
+    public function getReason()
     {
-        return $this->curl;
+        return $this->reason;
     }
 }
 
@@ -392,6 +408,22 @@ function liftM3(
     });
 }
 
+// getOnlyImage :: Either -> Either String String
+function getOnlyImage(Either\Either $either)
+{
+    return $either->bind(function ($content) {
+        $tmp = './tmp.get.only.txt';
+        $result = file_put_contents($tmp, $content);
+        var_dump($result);
+        var_dump(exif_imagetype($tmp));
+        var_dump(image_type_to_mime_type(exif_imagetype($tmp)));
+
+        return false === exif_imagetype($tmp)
+            ? Either\left(new ErrNoImage($content))
+            : Either\right($content);
+    });
+}
+
 // ChapterPage -> Either ErrCantDownload String
 function download(ChapterPage $chapterPage, $ttl = null)
 {
@@ -403,79 +435,70 @@ function download(ChapterPage $chapterPage, $ttl = null)
             './manga/' . $chapterPage->getChapter()->getName()
         ),
         Either\doubleMap(
-            function (ErrCurl $error) use ($chapterPage) {
-                return new ErrCantDownload($chapterPage, $error);
+            function (Err $error) use ($chapterPage) {
+                return new ErrChapter($chapterPage, $error);
             }
             , f\identity
-            , getUrl($chapterPage->getPageImage()->getUrl(), $ttl)
+            , getOnlyImage(getUrl($chapterPage->getPageImage()->getUrl(), $ttl))
         ),
         Either\Right::of($chapterPage)
     );
 }
-
-//$mangaUrl = 'http://www.mangatown.com/manga/ryuu_to_hidari_te/';
-$mangaUrl = 'http://www.mangatown.com/manga/dragon_ball_chou/';
-
-// fetchMangaData :: String -> Maybe (Collection (Maybe ChapterPage))
-$mangaData = fetchMangaData($mangaUrl);
-$givenType = is_object($mangaData) ? get_class($mangaData) : gettype($mangaData);
-//var_dump($givenType);
-//var_dump($mangaData);
-//file_put_contents('manga.state', serialize($mangaData));
-
-
-// Maybe (Collection Maybe Either ErrCantDownload String)
-$afterDownload = $mangaData->map(f\map(f\map(download)));
-$givenType = is_object($afterDownload) ? get_class($afterDownload) : gettype($afterDownload);
-//var_dump($givenType);
-//var_dump($afterDownload);
-
-//file_put_contents(serialize($afterDownload));
 
 const failed = 'failed';
 
 function failed(Maybe\Maybe $page, $ttl = null)
 {
     return $page->map(function (Either\Either $either) use ($ttl) {
-        return $either->either(function (ErrCantDownload $errCantDownload) use ($ttl) {
+        return $either->either(function (ErrChapter $errCantDownload) use ($ttl) {
             return download($errCantDownload->getChapterPage(), $ttl);
         }, Either\Right::of);
     });
 }
 
-$toRetry = $afterDownload->map(function (Collection $collection) {
-    $ttl = 2;
-    do {
-        $toRetry = f\filter(function (Maybe\Maybe $maybe) {
-            return $maybe->extract() instanceof Either\Left;
-        }, $collection);
 
-        var_dump(count($toRetry));
-        var_dump($collection = Collection::of($toRetry)->map(function($a) use(&$ttl) {
-            return failed($a, $ttl++);
-        }));
-    } while(count($toRetry) > 0);
-});
+//var_dump(download(new ChapterPage(
+//    new Chapter('Sudome', 'http://www.mangatown.com/manga/sundome/v01/c002/3.html'),
+//    new Page('03', 'http://www.mangatown.com/manga/sundome/v01/c002/3.html'),
+//    new PageImage('http://a.mangatown.com/store/manga/3412/01-002.0/compressed/002.jpg?v=51215960241')
+//)));
+//die;
 
+// get :: a -> {b} -> Maybe b
+function get($key, array $array = null)
+{
+    return call_user_func_array(f\curryN(2, function ($key, array $array) {
+        return array_key_exists($key, $array)
+            ? Maybe\just($array[$key])
+            : Maybe\nothing();
+    }), func_get_args());
+}
 
+IO\getArgs()->map(get(0))->map(function(Maybe\Maybe $argument) {
+    return $argument->map(function($mangaUrl) {
+        var_dump('started ', $mangaUrl);
+        $mangaData = fetchMangaData($mangaUrl);
+        var_dump('manga data ready');
+        $afterDownload = $mangaData->map(f\map(f\map(download)));
+        var_dump('manga first run');
+        $afterDownload->map(function (Collection $collection) {
+            $ttl = 2;
 
-//$r = Collection::of([
-//    Maybe\nothing()
-//    , Collection::of([
-//        Either\Left::of(
-//            new ErrCantDownload(
-//                new PageImage('http://')
-//                , new ErrCurl("http://", "Operation timed out after 1003 milliseconds with 0 bytes received"))),
-//    ])
-//]);
+            do {
+                var_dump('re-download');
+                $toRetry = f\filter(function (Maybe\Maybe $maybe) {
+                    return $maybe->extract() instanceof Either\Left;
+                }, $collection);
 
-//var_dump(getChapters($mangaUrl));
-// IO ()
-//function main()
-//{
-//    return IO\getArgs()->bind('var_dump');
-//}
-//
-//main()->run();
+                $count = count($toRetry);
+                $collection = Collection::of($toRetry)->map(function ($a) use (&$ttl, $count) {
+                    var_dump('retry', $ttl, $count);
+
+                    return failed($a, $ttl);
+                });
+            } while (count($toRetry) > 0);
+        });
+    });
+})->run();
 
 
