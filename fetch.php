@@ -1,7 +1,6 @@
 <?php
 require_once 'vendor/autoload.php';
 
-use FantasyLand\Monad;
 use Monad as M;
 use Monad\IO;
 use Monad\Maybe;
@@ -10,144 +9,7 @@ use Monad\Collection;
 use Monad\Control as control;
 use Functional as f;
 
-
-interface Err
-{
-}
-
-class ErrCurl implements Err
-{
-    private $url;
-    private $error;
-
-    public function __construct($url, $error)
-    {
-        $this->url = $url;
-        $this->error = $error;
-    }
-
-    public function getUrl()
-    {
-        return $this->url;
-    }
-
-    public function getError()
-    {
-        return $this->error;
-    }
-}
-
-class ErrNoImage implements Err
-{
-    /**
-     * @var string
-     */
-    private $invalidContent;
-
-    public function __construct($invalidContent)
-    {
-        $this->invalidContent = $invalidContent;
-    }
-
-    public function getInvalidContent()
-    {
-        return $this->invalidContent;
-    }
-}
-
-class ErrChapter implements Err
-{
-    /**
-     * @var ChapterPage
-     */
-    private $chapterPage;
-    /**
-     * @var Err
-     */
-    private $reason;
-
-    public function __construct(ChapterPage $chapterPage, Err $reason)
-    {
-        $this->chapterPage = $chapterPage;
-        $this->reason = $reason;
-    }
-
-    public function getChapterPage()
-    {
-        return $this->chapterPage;
-    }
-
-    public function getReason()
-    {
-        return $this->reason;
-    }
-}
-
 const getUrl = 'getUrl';
-
-// String -> Either String String
-function getUrl($url, $ttl = null)
-{
-    $curl = curl_init();
-    curl_setopt($curl, CURLOPT_HEADER, 0);
-    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($curl, CURLOPT_VERBOSE, false);
-    curl_setopt($curl, CURLOPT_FOLLOWLOCATION, 0);
-    // curl_setopt($curl, CURLOPT_REFERER, $referer);
-    curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_TIMEOUT, $ttl > 0 ? $ttl : 1);
-    $result = curl_exec($curl);
-    $errno = curl_errno($curl);
-    $error = curl_error($curl);
-    curl_close($curl);
-
-    return $errno !== 0
-        ? Either\Left::of(new ErrCurl($url, $error))
-        : Either\Right::of($result);
-}
-
-// String -> Either String String
-function makeDirectory($path)
-{
-    return !is_dir($path) && !mkdir($path, 0700, true)
-        ? Either\Left::of("Cant create directory $path")
-        : Either\Right::of($path);
-}
-
-// String -> String -> Either String String
-function writeFile($name, $content)
-{
-    return false === file_put_contents($name, $content)
-        ? Either\Left::of("Cant save content of the file $name")
-        : Either\Right::of($name);
-}
-
-const toDomDoc = 'toDomDoc';
-
-// String -> Either String DOMDocument
-function toDomDoc($data)
-{
-    $document = new \DOMDocument();
-    $previous = libxml_use_internal_errors(true);
-    $isLoaded = $document->loadHTML($data);
-    libxml_use_internal_errors($previous);
-
-    return $isLoaded
-        ? Either\Right::of($document)
-        : Either\Left::of("Can't load html data from given source");
-}
-
-// DOMDocument -> String -> Maybe (Collection DOMElement)
-function xpath(\DOMDocument $doc, $path)
-{
-    $xpath = new \DOMXPath($doc);
-    $elements = $xpath->query($path);
-
-    return $elements->length
-        ? Maybe\just(Collection::of($elements))
-        : Maybe\nothing();
-}
-
 
 class Chapter
 {
@@ -393,21 +255,6 @@ function fetchMangaData($mangaUrl)
 
 const download = 'download';
 
-function liftM3(
-    callable $transformation,
-    Monad $ma,
-    Monad $mb,
-    Monad $mc
-) {
-    return $ma->bind(function ($a) use ($mb, $mc, $transformation) {
-        return $mb->bind(function ($b) use ($mc, $a, $transformation) {
-            return $mc->bind(function ($c) use ($a, $b, $transformation) {
-                return call_user_func($transformation, $a, $b, $c);
-            });
-        });
-    });
-}
-
 // getOnlyImage :: Either -> Either String String
 function getOnlyImage(Either\Either $either)
 {
@@ -463,16 +310,6 @@ function failed(Maybe\Maybe $page, $ttl = null)
 //    new PageImage('http://a.mangatown.com/store/manga/3412/01-002.0/compressed/002.jpg?v=51215960241')
 //)));
 //die;
-
-// get :: a -> {b} -> Maybe b
-function get($key, array $array = null)
-{
-    return call_user_func_array(f\curryN(2, function ($key, array $array) {
-        return array_key_exists($key, $array)
-            ? Maybe\just($array[$key])
-            : Maybe\nothing();
-    }), func_get_args());
-}
 
 IO\getArgs()->map(get(0))->map(function(Maybe\Maybe $argument) {
     return $argument->map(function($mangaUrl) {
