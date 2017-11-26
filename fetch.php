@@ -1,13 +1,11 @@
 <?php
 require_once 'vendor/autoload.php';
 
-use Monad as M;
+use Functional as f;
+use Monad\Collection;
+use Monad\Either;
 use Monad\IO;
 use Monad\Maybe;
-use Monad\Either;
-use Monad\Collection;
-use Monad\Control as control;
-use Functional as f;
 
 const getUrl = 'getUrl';
 
@@ -33,6 +31,12 @@ class Chapter
     }
 }
 
+
+function normaliseMangatownURL($href)
+{
+    return str_replace('//www.mangatown.com/', 'https://www.mangatown.com/', $href);
+}
+
 const elementToChapterItem = 'elementToChapterItem';
 
 // DOMElement -> Chapter
@@ -40,7 +44,7 @@ function elementToChapterItem(DOMElement $element)
 {
     return new Chapter(
         trim($element->nodeValue),
-        $element->getAttribute('href')
+        normaliseMangatownURL($element->getAttribute('href'))
     );
 }
 
@@ -86,7 +90,7 @@ function elementToPage(DOMElement $element)
 {
     return new Page(
         trim($element->nodeValue),
-        $element->getAttribute('value')
+        normaliseMangatownURL($element->getAttribute('value'))
     );
 }
 
@@ -95,7 +99,7 @@ const chapterPages = 'chapterPages';
 // DOMDocument -> Maybe (Collection Page)
 function chapterPages(\DOMDocument $doc)
 {
-    $xpath = "//option[contains(normalize-space(@value), 'http')]";
+    $xpath = "//option[contains(normalize-space(@value), '//www.')]";
 
     return f\map(f\map(elementToPage), xpath($doc, $xpath));
 }
@@ -121,7 +125,7 @@ const elementToPageImage = 'elementToPageImage';
 function elementToPageImage(DOMElement $element)
 {
     return new PageImage(
-        $element->getAttribute('src')
+        normaliseMangatownURL($element->getAttribute('src'))
     );
 }
 
@@ -311,8 +315,8 @@ function failed(Maybe\Maybe $page, $ttl = null)
 //)));
 //die;
 
-IO\getArgs()->map(get(0))->map(function(Maybe\Maybe $argument) {
-    return $argument->map(function($mangaUrl) {
+IO\getArgs()->map(get(0))->map(function (Maybe\Maybe $argument) {
+    return $argument->map(function ($mangaUrl) {
         var_dump('started ', $mangaUrl);
         $mangaData = fetchMangaData($mangaUrl);
         var_dump('manga data ready');

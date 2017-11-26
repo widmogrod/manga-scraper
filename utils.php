@@ -42,7 +42,7 @@ function getUrl($url, $ttl = null)
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, 0);
     // curl_setopt($curl, CURLOPT_REFERER, $referer);
     curl_setopt($curl, CURLOPT_URL, $url);
-    curl_setopt($curl, CURLOPT_TIMEOUT, $ttl > 0 ? $ttl : 1);
+    curl_setopt($curl, CURLOPT_TIMEOUT, $ttl > 0 ? $ttl : 5);
     $result = curl_exec($curl);
     $errno = curl_errno($curl);
     $error = curl_error($curl);
