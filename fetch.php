@@ -48,6 +48,13 @@ function elementToChapterItem(DOMElement $element)
     );
 }
 
+function uniqueChapter()
+{
+    return unique(function (Chapter $value) {
+        return $value->getUrl();
+    });
+}
+
 const chaptersList = 'chaptersList';
 
 // DOMDocument -> Maybe (Collection Chapter)
@@ -58,7 +65,8 @@ function chaptersList(\DOMDocument $doc)
         "//li" .
         "//a";
 
-    return f\map(f\map(elementToChapterItem), xpath($doc, $xpath));
+    $unique = f\compose(Collection::of, f\filter(uniqueChapter()));
+    return f\map($unique, f\map(f\map(elementToChapterItem), xpath($doc, $xpath)));
 }
 
 class Page
@@ -137,6 +145,14 @@ function elementToPageImage(DOMElement $element)
     );
 }
 
+function uniquePageImage()
+{
+    return unique(function (PageImage $value) {
+        return $value->getUrl();
+    });
+}
+
+
 const pageImageURL = 'pageImageURL';
 
 // DOMDocument -> Maybe (Collection PageImage)
@@ -146,7 +162,8 @@ function pageImageURL(\DOMDocument $doc)
         "//div[contains(normalize-space(@id), 'viewer')]" .
         "//img";
 
-    return f\map(f\map(elementToPageImage), xpath($doc, $xpath));
+    $unique = f\compose(Collection::of, f\filter(uniquePageImage()));
+    return f\map($unique, f\map(f\map(elementToPageImage), xpath($doc, $xpath)));
 }
 
 
@@ -327,7 +344,7 @@ IO\getArgs()->map(get(0))->map(function (Maybe\Maybe $argument) {
     return $argument->map(function ($mangaUrl) {
         var_dump('started ', $mangaUrl);
         $mangaData = fetchMangaData($mangaUrl);
-        var_dump('manga data ready', $mangaData);
+        var_dump('manga data ready');
         $afterDownload = $mangaData->map(f\map(f\map(download)));
         var_dump('manga first run');
         $afterDownload->map(function (Collection $collection) {

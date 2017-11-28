@@ -103,10 +103,10 @@ function unique(callable $predicate, array $buffer = [])
     return function ($value) use ($predicate, &$buffer) {
         $key = $predicate($value);
         if (isset($buffer[$key])) {
-            return true;
+            return false;
         }
 
         $buffer[$key] = true;
-        return false;
+        return true;
     };
 }
