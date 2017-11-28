@@ -137,14 +137,6 @@ function elementToPageImage(DOMElement $element)
     );
 }
 
-function uniquePageImage()
-{
-    return unique(function (PageImage $value) {
-        return $value->getUrl();
-    });
-}
-
-
 const pageImageURL = 'pageImageURL';
 
 // DOMDocument -> Maybe (Collection PageImage)
@@ -154,8 +146,7 @@ function pageImageURL(\DOMDocument $doc)
         "//div[contains(normalize-space(@id), 'viewer')]" .
         "//img";
 
-    $unique = f\compose(Collection::of, f\filter(uniquePageImage()));
-    return f\map($unique, f\map(f\map(elementToPageImage), xpath($doc, $xpath)));
+    return f\map(f\map(elementToPageImage), xpath($doc, $xpath));
 }
 
 
