@@ -1,16 +1,18 @@
 <?php
-use FantasyLand\Monad;
-use Functional as f;
-use Monad\Collection;
-use Monad\Maybe;
-use Monad\Either;
+
+use Widmogrod\FantasyLand\Monad;
+use Widmogrod\Functional as f;
+use Widmogrod\Monad\Collection;
+use Widmogrod\Monad\Either;
+use Widmogrod\Monad\Maybe;
 
 function liftM3(
     callable $transformation,
     Monad $ma,
     Monad $mb,
     Monad $mc
-) {
+)
+{
     return $ma->bind(function ($a) use ($mb, $mc, $transformation) {
         return $mb->bind(function ($b) use ($mc, $a, $transformation) {
             return $mc->bind(function ($c) use ($a, $b, $transformation) {
@@ -48,6 +50,7 @@ function getUrl($url, $ttl = null)
     $error = curl_error($curl);
     curl_close($curl);
 
+    var_dump(['$url' => $url, '$errno' => $errno, '$ttl' => $ttl]);
     return $errno !== 0
         ? Either\Left::of(new ErrCurl($url, $error))
         : Either\Right::of($result);
@@ -95,3 +98,15 @@ function xpath(\DOMDocument $doc, $path)
         : Maybe\nothing();
 }
 
+function unique(callable $predicate, array $buffer = [])
+{
+    return function ($value) use ($predicate, &$buffer) {
+        $key = $predicate($value);
+        if (isset($buffer[$key])) {
+            return true;
+        }
+
+        $buffer[$key] = true;
+        return false;
+    };
+}

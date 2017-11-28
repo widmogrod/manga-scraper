@@ -1,11 +1,11 @@
 <?php
 require_once 'vendor/autoload.php';
 
-use Functional as f;
-use Monad\Collection;
-use Monad\Either;
-use Monad\IO;
-use Monad\Maybe;
+use Widmogrod\Functional as f;
+use Widmogrod\Monad\Collection;
+use Widmogrod\Monad\Either;
+use Widmogrod\Monad\IO;
+use Widmogrod\Monad\Maybe;
 
 const getUrl = 'getUrl';
 
@@ -50,7 +50,7 @@ function elementToChapterItem(DOMElement $element)
 
 const chaptersList = 'chaptersList';
 
-// DOMDocument -> Maybe (Collection ChapterItem)
+// DOMDocument -> Maybe (Collection Chapter)
 function chaptersList(\DOMDocument $doc)
 {
     $xpath =
@@ -94,6 +94,13 @@ function elementToPage(DOMElement $element)
     );
 }
 
+function uniquePage()
+{
+    return unique(function (Page $value) {
+        return $value->getUrl();
+    });
+}
+
 const chapterPages = 'chapterPages';
 
 // DOMDocument -> Maybe (Collection Page)
@@ -101,7 +108,8 @@ function chapterPages(\DOMDocument $doc)
 {
     $xpath = "//option[contains(normalize-space(@value), '//www.')]";
 
-    return f\map(f\map(elementToPage), xpath($doc, $xpath));
+    $unique = f\compose(Collection::of, f\filter(uniquePage()));
+    return f\map($unique, f\map(f\map(elementToPage), xpath($doc, $xpath)));
 }
 
 class PageImage
@@ -129,6 +137,14 @@ function elementToPageImage(DOMElement $element)
     );
 }
 
+function uniquePageImage()
+{
+    return unique(function (PageImage $value) {
+        return $value->getUrl();
+    });
+}
+
+
 const pageImageURL = 'pageImageURL';
 
 // DOMDocument -> Maybe (Collection PageImage)
@@ -138,7 +154,8 @@ function pageImageURL(\DOMDocument $doc)
         "//div[contains(normalize-space(@id), 'viewer')]" .
         "//img";
 
-    return f\map(f\map(elementToPageImage), xpath($doc, $xpath));
+    $unique = f\compose(Collection::of, f\filter(uniquePageImage()));
+    return f\map($unique, f\map(f\map(elementToPageImage), xpath($doc, $xpath)));
 }
 
 
@@ -319,7 +336,7 @@ IO\getArgs()->map(get(0))->map(function (Maybe\Maybe $argument) {
     return $argument->map(function ($mangaUrl) {
         var_dump('started ', $mangaUrl);
         $mangaData = fetchMangaData($mangaUrl);
-        var_dump('manga data ready');
+        var_dump('manga data ready', $mangaData);
         $afterDownload = $mangaData->map(f\map(f\map(download)));
         var_dump('manga first run');
         $afterDownload->map(function (Collection $collection) {

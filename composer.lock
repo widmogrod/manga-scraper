@@ -4,21 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "76de6abfc504c6a9900e53aa970cabcb",
-    "content-hash": "a983a69399e7df20603838a9ecd55c46",
+    "content-hash": "96f89bffa98054aad130bbb5a79b1d62",
     "packages": [
         {
             "name": "widmogrod/php-functional",
-            "version": "2.1.0",
+            "version": "3.0.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/widmogrod/php-functional.git",
-                "reference": "762cd841c6f4b7034f892d5bd38e8d7cea083378"
+                "reference": "51cb5a24bf3b9d85b4c7880cd72d8c1bd4114c30"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/widmogrod/php-functional/zipball/762cd841c6f4b7034f892d5bd38e8d7cea083378",
-                "reference": "762cd841c6f4b7034f892d5bd38e8d7cea083378",
+                "url": "https://api.github.com/repos/widmogrod/php-functional/zipball/51cb5a24bf3b9d85b4c7880cd72d8c1bd4114c30",
+                "reference": "51cb5a24bf3b9d85b4c7880cd72d8c1bd4114c30",
                 "shasum": ""
             },
             "require-dev": {
@@ -26,11 +25,8 @@
             },
             "type": "library",
             "autoload": {
-                "psr-0": {
-                    "Common": "src",
-                    "Monad": "src",
-                    "Helpful": "src",
-                    "FantasyLand": "src"
+                "psr-4": {
+                    "Widmogrod\\": "./src"
                 },
                 "files": [
                     "src/Functional/functions.php",
@@ -55,7 +51,7 @@
                 }
             ],
             "description": "Functors, Applicative and Monads are fascinating concept. Purpose of this library is to explore them in OOP PHP world.",
-            "time": "2015-11-22 20:34:16"
+            "time": "2016-10-16T16:09:29+00:00"
         }
     ],
     "packages-dev": [],
