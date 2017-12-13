@@ -2,7 +2,7 @@
 
 use Widmogrod\FantasyLand\Monad;
 use Widmogrod\Functional as f;
-use Widmogrod\Monad\Collection;
+use Widmogrod\Primitive\Listt;
 use Widmogrod\Monad\Either;
 use Widmogrod\Monad\Maybe;
 
@@ -87,14 +87,14 @@ function toDomDoc($data)
         : Either\Left::of("Can't load html data from given source");
 }
 
-// DOMDocument -> String -> Maybe (Collection DOMElement)
+// DOMDocument -> String -> Maybe (Listt DOMElement)
 function xpath(\DOMDocument $doc, $path)
 {
     $xpath = new \DOMXPath($doc);
     $elements = $xpath->query($path);
 
     return $elements->length
-        ? Maybe\just(Collection::of($elements))
+        ? Maybe\just(Listt::of($elements))
         : Maybe\nothing();
 }
 

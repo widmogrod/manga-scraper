@@ -2,10 +2,10 @@
 require_once 'vendor/autoload.php';
 
 use Widmogrod\Functional as f;
-use Widmogrod\Monad\Collection;
 use Widmogrod\Monad\Either;
 use Widmogrod\Monad\IO;
 use Widmogrod\Monad\Maybe;
+use Widmogrod\Primitive\Listt;
 
 const getUrl = 'getUrl';
 
@@ -28,6 +28,20 @@ class Chapter
     public function getName()
     {
         return $this->name;
+    }
+
+    public function getMangaName()
+    {
+        if (false !== preg_match('/^(?P<name>.+)\s+(?P<number>[\d\.]+)$/i', $this->name, $matches)) {
+            return $matches['name'];
+        }
+    }
+
+    public function getNumber()
+    {
+        if (false !== preg_match('/(?P<number>[\d\.]+)$/i', $this->name, $matches)) {
+            return $matches['number'];
+        }
     }
 }
 
@@ -57,7 +71,7 @@ function uniqueChapter()
 
 const chaptersList = 'chaptersList';
 
-// DOMDocument -> Maybe (Collection Chapter)
+// DOMDocument -> Maybe (Listt Chapter)
 function chaptersList(\DOMDocument $doc)
 {
     $xpath =
@@ -65,7 +79,7 @@ function chaptersList(\DOMDocument $doc)
         "//li" .
         "//a";
 
-    $unique = f\compose(Collection::of, f\filter(uniqueChapter()));
+    $unique = f\compose(Listt::of, f\filter(uniqueChapter()));
     return f\map($unique, f\map(f\map(elementToChapterItem), xpath($doc, $xpath)));
 }
 
@@ -89,6 +103,18 @@ class Page
     {
         return $this->name;
     }
+
+    public function getNumber()
+    {
+        return $this->isFeatured()
+            ? null
+            : (int)ltrim($this->name, "0");
+    }
+
+    public function isFeatured()
+    {
+        return false === preg_match('/^[\d\.]+$/i', $this->name);
+    }
 }
 
 const elementToPage = 'elementToPage';
@@ -111,12 +137,15 @@ function uniquePage()
 
 const chapterPages = 'chapterPages';
 
-// DOMDocument -> Maybe (Collection Page)
+// DOMDocument -> Maybe (Listt Page)
 function chapterPages(\DOMDocument $doc)
 {
     $xpath = "//option[contains(normalize-space(@value), '//www.')]";
+    $pageNumberOnly = function(Page $page) {
+        return !$page->isFeatured();
+    };
 
-    $unique = f\compose(Collection::of, f\filter(uniquePage()));
+    $unique = f\compose(Listt::of, f\filter(uniquePage()), Listt::of, f\filter($pageNumberOnly));
     return f\map($unique, f\map(f\map(elementToPage), xpath($doc, $xpath)));
 }
 
@@ -155,19 +184,19 @@ function uniquePageImage()
 
 const pageImageURL = 'pageImageURL';
 
-// DOMDocument -> Maybe (Collection PageImage)
+// DOMDocument -> Maybe (Listt PageImage)
 function pageImageURL(\DOMDocument $doc)
 {
     $xpath =
         "//div[contains(normalize-space(@id), 'viewer')]" .
         "//img";
 
-    $unique = f\compose(Collection::of, f\filter(uniquePageImage()));
+    $unique = f\compose(Listt::of, f\filter(uniquePageImage()));
     return f\map($unique, f\map(f\map(elementToPageImage), xpath($doc, $xpath)));
 }
 
 
-// getChapters :: String -> Maybe (Collection Chapter)
+// getChapters :: String -> Maybe (Listt Chapter)
 function getChapters($mangaUrl)
 {
     return call_user_func(f\pipeline(
@@ -178,7 +207,7 @@ function getChapters($mangaUrl)
     ), $mangaUrl);
 }
 
-// getChapterPages :: Chapter -> Maybe (Collection Page)
+// getChapterPages :: Chapter -> Maybe (Listt Page)
 function getChapterPages(Chapter $chapter)
 {
     return call_user_func(f\pipeline(
@@ -189,7 +218,7 @@ function getChapterPages(Chapter $chapter)
     ), $chapter->getUrl());
 }
 
-// getPagesImageURL :: Page -> Maybe (Collection PageImage)
+// getPagesImageURL :: Page -> Maybe (Listt PageImage)
 function getPagesImageURL(Page $page)
 {
     return call_user_func(f\pipeline(
@@ -248,22 +277,22 @@ class ChapterPage
     }
 }
 
-// String -> Maybe (Collection (Maybe ChapterPage))
+// String -> Maybe (Listt (Maybe ChapterPage))
 function fetchMangaData($mangaUrl)
 {
-    // getChapters :: String -> Maybe (Collection Chapter)
+    // getChapters :: String -> Maybe (Listt Chapter)
     return getChapters($mangaUrl)
-        ->map(function (Collection $chapters) {
+        ->map(function (Listt $chapters) {
             return $chapters
                 ->bind(function (Chapter $chapter) {
-                    // getChapterPages :: Chapter -> Maybe (Collection Page)
+                    // getChapterPages :: Chapter -> Maybe (Listt Page)
                     return getChapterPages($chapter)
-                        ->bind(function (Collection $pages) use ($chapter) {
+                        ->bind(function (Listt $pages) use ($chapter) {
                             return $pages
                                 ->bind(function (Page $page) use ($chapter) {
-                                    // getPagesImageURL :: Page -> Maybe (Collection PageImage)
+                                    // getPagesImageURL :: Page -> Maybe (Listt PageImage)
                                     return getPagesImageURL($page)
-                                        ->bind(function (Collection $images) use ($chapter, $page) {
+                                        ->bind(function (Listt $images) use ($chapter, $page) {
                                             return $images
                                                 ->bind(function (PageImage $image) use (
                                                     $chapter,
@@ -303,12 +332,21 @@ function getOnlyImage(Either\Either $either)
 // ChapterPage -> Either ErrCantDownload String
 function download(ChapterPage $chapterPage, $ttl = null)
 {
+    // Multiplying by 100 give buffer for each chapter to have 1000 pages
+    $chapterNo = $chapterPage->getChapter()->getNumber() * 1000;
+
     return liftM3(
-        function ($path, $imageContent, ChapterPage $chapterPage) {
-            return writeFile($path . '/' . $chapterPage->getPage()->getName() . '.jpg', $imageContent);
+        function ($path, $imageContent, ChapterPage $chapterPage) use ($chapterNo) {
+            $pageNo = $chapterPage->getPage()->getNumber();
+            $number = $chapterNo + $pageNo;
+
+            // Padding absolute page allows to make sorting robust for readers
+            $number = str_pad("$number", 20, "0", STR_PAD_LEFT);
+
+            return writeFile($path . '/' . $number . '.jpg', $imageContent);
         },
         makeDirectory(
-            './manga/' . $chapterPage->getChapter()->getName()
+            './manga/' . $chapterPage->getChapter()->getMangaName()
         ),
         Either\doubleMap(
             function (Err $error) use ($chapterPage) {
@@ -347,17 +385,17 @@ IO\getArgs()->map(get(0))->map(function (Maybe\Maybe $argument) {
         var_dump('manga data ready');
         $afterDownload = $mangaData->map(f\map(f\map(download)));
         var_dump('manga first run');
-        $afterDownload->map(function (Collection $collection) {
+        $afterDownload->map(function (Listt $Listt) {
             $ttl = 2;
 
             do {
                 var_dump('re-download');
                 $toRetry = f\filter(function (Maybe\Maybe $maybe) {
                     return $maybe->extract() instanceof Either\Left;
-                }, $collection);
+                }, $Listt);
 
                 $count = count($toRetry);
-                $collection = Collection::of($toRetry)->map(function ($a) use (&$ttl, $count) {
+                $Listt = Listt::of($toRetry)->map(function ($a) use (&$ttl, $count) {
                     var_dump('retry', $ttl, $count);
 
                     return failed($a, $ttl);

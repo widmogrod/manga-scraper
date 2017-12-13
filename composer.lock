@@ -8,19 +8,24 @@
     "packages": [
         {
             "name": "widmogrod/php-functional",
-            "version": "3.0.0",
+            "version": "3.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/widmogrod/php-functional.git",
-                "reference": "51cb5a24bf3b9d85b4c7880cd72d8c1bd4114c30"
+                "reference": "20bfef65775cdfba75b96c260f780efd2aad6e49"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/widmogrod/php-functional/zipball/51cb5a24bf3b9d85b4c7880cd72d8c1bd4114c30",
-                "reference": "51cb5a24bf3b9d85b4c7880cd72d8c1bd4114c30",
+                "url": "https://api.github.com/repos/widmogrod/php-functional/zipball/20bfef65775cdfba75b96c260f780efd2aad6e49",
+                "reference": "20bfef65775cdfba75b96c260f780efd2aad6e49",
                 "shasum": ""
             },
+            "require": {
+                "php": ">=7.1"
+            },
             "require-dev": {
+                "codeclimate/php-test-reporter": "^0.4.4",
+                "friendsofphp/php-cs-fixer": "^2",
                 "phpunit/phpunit": "^4.7"
             },
             "type": "library",
@@ -32,12 +37,18 @@
                     "src/Functional/functions.php",
                     "src/Functional/predicates.php",
                     "src/Functional/strings.php",
+                    "src/Functional/monoid.php",
+                    "src/Functional/setoid.php",
+                    "src/Monad/Control/functions.php",
                     "src/Monad/Either/functions.php",
                     "src/Monad/Maybe/functions.php",
+                    "src/Monad/Free/functions.php",
+                    "src/Monad/Free2/functions.php",
                     "src/Monad/IO/functions.php",
                     "src/Monad/IO/errors.php",
+                    "src/Monad/Reader/functions.php",
                     "src/Monad/State/functions.php",
-                    "src/Monad/Control/functions.php"
+                    "src/Monad/Writer/functions.php"
                 ]
             },
             "notification-url": "https://packagist.org/downloads/",
@@ -51,7 +62,7 @@
                 }
             ],
             "description": "Functors, Applicative and Monads are fascinating concept. Purpose of this library is to explore them in OOP PHP world.",
-            "time": "2016-10-16T16:09:29+00:00"
+            "time": "2017-12-12T23:16:40+00:00"
         }
     ],
     "packages-dev": [],
