@@ -2,9 +2,9 @@
 
 use Widmogrod\FantasyLand\Monad;
 use Widmogrod\Functional as f;
-use Widmogrod\Primitive\Listt;
 use Widmogrod\Monad\Either;
 use Widmogrod\Monad\Maybe;
+use Widmogrod\Primitive\Listt;
 
 function liftM3(
     callable $transformation,
@@ -24,17 +24,22 @@ function liftM3(
 
 
 // get :: a -> {b} -> Maybe b
-function get($key, array $array = null)
+function get($key, Listt $array = null)
 {
-    return call_user_func_array(f\curryN(2, function ($key, array $array) {
-        return array_key_exists($key, $array)
-            ? Maybe\just($array[$key])
+    return f\curryN(2, function ($key, Listt $array) {
+        return array_key_exists($key, $array->extract())
+            ? Maybe\just($array->extract()[$key])
             : Maybe\nothing();
-    }), func_get_args());
+    })(...func_get_args());
 }
 
+const curlHeaders = [
+    'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:56.0) Gecko/20100101 Firefox/56.0',
+];
 
-// String -> Either String String
+const getUrl = 'getUrl';
+
+// String -> Either ErrCurl String
 function getUrl($url, $ttl = null)
 {
     $curl = curl_init();
@@ -45,12 +50,23 @@ function getUrl($url, $ttl = null)
     // curl_setopt($curl, CURLOPT_REFERER, $referer);
     curl_setopt($curl, CURLOPT_URL, $url);
     curl_setopt($curl, CURLOPT_TIMEOUT, $ttl > 0 ? $ttl : 5);
+    curl_setopt($curl, CURLOPT_HTTPHEADER, curlHeaders);
+    curl_setopt($curl, CURLOPT_ENCODING, '');
     $result = curl_exec($curl);
     $errno = curl_errno($curl);
     $error = curl_error($curl);
     curl_close($curl);
 
-    var_dump(['$url' => $url, '$errno' => $errno, '$ttl' => $ttl]);
+//    var_dump([
+//        '$url' => $url,
+//        '$errno' => $errno,
+//        '$length' => strlen($result),
+//    ]);
+
+//    if (strlen($result) < 10000) {
+//        file_put_contents('./'.preg_replace('/[^\wd]+/', '_', $url), $result);
+//    }
+
     return $errno !== 0
         ? Either\Left::of(new ErrCurl($url, $error))
         : Either\Right::of($result);
@@ -93,8 +109,8 @@ function xpath(\DOMDocument $doc, $path)
     $xpath = new \DOMXPath($doc);
     $elements = $xpath->query($path);
 
-    return $elements->length
-        ? Maybe\just(Listt::of($elements))
+    return $elements->length > 0
+        ? Maybe\just(f\fromIterable(iterator_to_array($elements)))
         : Maybe\nothing();
 }
 

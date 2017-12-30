@@ -1,6 +1,6 @@
 {
     "require": {
-        "widmogrod/php-functional": "^3.0"
+        "widmogrod/php-functional": "^4.1"
     },
     "autoload": {
         "files": [
